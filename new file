@@ -1,0 +1,122 @@
+import requests
+import json
+import re
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import time
+
+# -----------------------------
+# UNIVERSAL EXTRACTOR (DEFINE FIRST)
+# -----------------------------
+def extract_hackathon_data(text, soup):
+
+    title = soup.title.string if soup.title else "Not found"
+
+    prize = re.findall(r'(₹|\$)\s?\d+[,\d]*', text)
+
+    deadline = re.findall(
+        r'\b\d{1,2}\s(January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}\b',
+        text
+    )
+
+    team = re.findall(
+        r'\b\d+\s?(members|people|team members)\b',
+        text,
+        re.IGNORECASE
+    )
+    return {
+        "name": title,
+        "prize": prize[0] if prize else "Not found",
+        "deadline": deadline[0] if deadline else "Not found",
+        "team_size": team[0] if team else "Not found"
+    }
+
+# -----------------------------
+# HTML SCRAPER
+# -----------------------------
+def scrape_html(url):
+
+    response = requests.get(url)
+
+    print("Status Code:", response.status_code)   # Debug line
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    print("Page Title:", soup.title)              # Debug line
+
+    return extract_hackathon_data(soup.get_text(), soup)
+
+# -----------------------------
+# JS / SELENIUM SCRAPER
+# -----------------------------
+def scrape_js(url):
+    print("Using JavaScript (Selenium) scraping...")
+
+    options = Options()
+    options.add_argument("--headless")
+    driver = webdriver.Chrome(options=options)
+
+    driver.get(url)
+    time.sleep(5)
+
+    html = driver.page_source
+    driver.quit()
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    return extract_hackathon_data(soup.get_text(), soup)
+
+# -----------------------------
+# API SCRAPER
+# -----------------------------
+def scrape_api(url):
+
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    
+    print("Status:", response.status_code)
+    
+    data = response.json()
+    
+    print("Full JSON response:")
+    print(data)
+    
+    return data
+# -----------------------------
+# MAIN FUNCTION
+# -----------------------------
+def scrape(url, mode):
+
+    if mode == "html":
+        return scrape_html(url)
+
+    elif mode == "js":
+        return scrape_js(url)
+
+    elif mode == "api":
+        return scrape_api(url)
+
+    else:
+        print("Invalid mode.")
+        return None
+
+# =====================================
+# RUN PROGRAM
+# =====================================
+if __name__ == "__main__":
+
+    url = input("Enter URL: ")
+    mode = input("Enter mode (html/js/api): ").lower()
+
+    result = scrape(url, mode)
+
+    if result:
+
+        # Save to JSON file
+        with open("hackathons.json", "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=4)
+
+        print("✅ Data saved to hackathons.json")
+
+    else:
+        print("No data extracted.")
